@@ -22,6 +22,10 @@ body {
   text-align: center;
 }
 
+a {
+  text-decoration: none;
+}
+
 .landing-container {
   text-align: center;
   width: 100%;
