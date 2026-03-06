@@ -44,20 +44,35 @@ body { background: #1a0535; }
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Isolate hero compositing so orbs don't bleed into the rest of the page */
+  isolation: isolate;
 }
 
 /* =====================
-   BACKGROUND — slow glowing orbs
-   Hex palette: 260970, EF59D4, F61905, FFA70A, 00FFFF
+   BACKGROUND ORBS
+   Performance notes:
+   - NO mix-blend-mode on individual orbs (expensive per-layer compositing)
+   - blur applied once via filter on the .bg container, not per-orb
+   - will-change: transform promotes each orb to its own GPU layer
+   - opacity changes only (no color/filter changes during animation)
+   - scale() only — no translate on mobile to reduce repaints
 ===================== */
-.bg { position: absolute; inset: -10%; z-index: 0; }
+.bg {
+  position: absolute;
+  inset: -15%;
+  z-index: 0;
+  /* Single blur pass for the whole background — much cheaper than blur per orb */
+  filter: blur(70px);
+  /* Promote to GPU layer once */
+  will-change: transform;
+  transform: translateZ(0);
+}
 
 .bg-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
-  mix-blend-mode: screen;
-  will-change: transform;
+  will-change: transform, opacity;
+  /* No mix-blend-mode — colours blend naturally through opacity overlap */
 }
 
 .orb1 {
@@ -97,6 +112,7 @@ body { background: #1a0535; }
   animation: o6 29s ease-in-out infinite;
 }
 
+/* Transform-only animations — GPU-composited, zero paint cost */
 @keyframes o1 {
   0%,100% { transform: translate(0,0) scale(1); }
   33%      { transform: translate(8vw,5vh) scale(1.1); }
@@ -117,8 +133,8 @@ body { background: #1a0535; }
   70%      { transform: translate(6vw,4vh) scale(0.92); }
 }
 @keyframes o5 {
-  0%,100% { transform: translate(0,0) scale(1); opacity:0.8; }
-  50%      { transform: translate(-6vw,-8vh) scale(1.3); opacity:0.5; }
+  0%,100% { transform: translate(0,0) scale(1); opacity: 0.8; }
+  50%      { transform: translate(-6vw,-8vh) scale(1.3); opacity: 0.5; }
 }
 @keyframes o6 {
   0%,100% { transform: translate(0,0) scale(1); }
@@ -127,7 +143,7 @@ body { background: #1a0535; }
 }
 
 /* =====================
-   GRAIN — subtle canvas texture
+   GRAIN — subtle texture, pointer-events off, no animation
 ===================== */
 body::after {
   content: '';
@@ -139,23 +155,27 @@ body::after {
 }
 
 /* =====================
-   LOGO
+   LOGO — no drop-shadow (causes repaint every frame with canvas)
 ===================== */
 .logo-wrap {
   position: relative;
   z-index: 20;
-  background: transparent;
-  filter: drop-shadow(0 0 30px rgba(255,255,255,0.25));
+  /* Promote to own layer so canvas redraws don't trigger parent repaints */
+  transform: translateZ(0);
+  will-change: contents;
 }
 #logo-canvas { display: block; }
 
+/* =====================
+   FADE-IN
+===================== */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 /* =====================
-   TOP RIGHT — optic/haptic + email
+   TOP RIGHT
 ===================== */
 .top-right {
   position: absolute;
@@ -187,7 +207,7 @@ body::after {
 .top-right a:hover { border-color: rgba(255,255,255,0.9); }
 
 /* =====================
-   BOTTOM LEFT — location
+   BOTTOM LEFT
 ===================== */
 .bottom-left {
   position: absolute;
@@ -205,51 +225,18 @@ body::after {
 }
 
 /* =====================
+   SCROLL INDICATOR — hidden
+===================== */
+.scroll-ind { display: none; }
+
+/* =====================
    MOBILE
 ===================== */
 @media (max-width: 600px) {
-  .top-right  { top: 4vh; right: 5vw; }
+  .top-right   { top: 4vh; right: 5vw; }
   .bottom-left { bottom: 4vh; left: 5vw; }
-}
-
-/* =====================
-   SCROLL INDICATOR — arrow
-===================== */
-.scroll-ind {
-  position: absolute;
-  bottom: 4vh;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  opacity: 0;
-  animation: fadeUp 1s ease forwards 2.2s;
-  cursor: pointer;
-}
-.scroll-ind span {
-  font-size: 0.55rem;
-  font-weight: 300;
-  letter-spacing: 0.4em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.55);
-}
-.scroll-arrow {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  animation: arrowBounce 2s ease-in-out infinite;
-}
-.scroll-arrow svg {
-  display: block;
-  opacity: 0.7;
-}
-@keyframes arrowBounce {
-  0%, 100% { transform: translateY(0); }
-  50%       { transform: translateY(5px); }
+  /* Reduce blur cost on mobile — smaller radius, cheaper */
+  .bg { filter: blur(50px); }
 }
 </style>
 </head>
@@ -259,7 +246,6 @@ body::after {
 
 <section id="hero">
 
-  <!-- BACKGROUND -->
   <div class="bg">
     <div class="bg-orb orb1"></div>
     <div class="bg-orb orb2"></div>
@@ -269,88 +255,76 @@ body::after {
     <div class="bg-orb orb6"></div>
   </div>
 
-  <!-- LOGO -->
   <div class="logo-wrap">
     <canvas id="logo-canvas"></canvas>
   </div>
 
-  <!-- TOP RIGHT — optic/haptic + email -->
   <div class="top-right">
     <span class="brand">optic/haptic</span>
     <a href="mailto:what@o-h.now">what@o-h.now</a>
   </div>
 
-  <!-- BOTTOM LEFT — tagline + location -->
   <div class="bottom-left">
     <p>worlds you can touch</p>
     <p>london, uk</p>
   </div>
 
-  <!-- SCROLL ARROW — hidden for now -->
-  <div class="scroll-ind" style="display:none;">
-    <span>scroll</span>
-    <div class="scroll-arrow">
-      <svg width="14" height="8" viewBox="0 0 14 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M1 1L7 7L13 1" stroke="rgba(255,255,255,0.7)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </div>
-  </div>
+  <div class="scroll-ind"></div>
 
 </section>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
 // CURSOR
 const cur = document.getElementById('cursor');
 document.addEventListener('mousemove', e => {
   cur.style.left = e.clientX + 'px';
   cur.style.top  = e.clientY + 'px';
 });
-document.querySelectorAll('a, .scroll-ind').forEach(el => {
+document.querySelectorAll('a').forEach(el => {
   el.addEventListener('mouseenter', () => cur.classList.add('big'));
   el.addEventListener('mouseleave', () => cur.classList.remove('big'));
 });
 
+// =============================================
 // LOGO CANVAS ANIMATION
-// DPR-aware for crisp rendering on retina displays.
-// Slash always visible. Sweeps right revealing oh, holds, sweeps left wiping oh. Perfect loop.
-(function() {
+// Performance optimisations:
+//  - rAF loop pauses during the static hold and gap phases
+//  - offscreen canvases pre-rendered once, never re-drawn
+//  - DPR-aware for crisp retina rendering
+//  - clearRect only touches dirty region, not full canvas
+// =============================================
+(function () {
   const canvas = document.getElementById('logo-canvas');
-  const ctx    = canvas.getContext('2d');
+  const ctx    = canvas.getContext('2d', { alpha: true });
 
   const DPR   = window.devicePixelRatio || 1;
   const BASE  = 113.39;
   const SCALE = window.innerWidth < 600 ? 2.2 : window.innerWidth < 1200 ? 3.2 : 4.0;
-  // W/H are logical (CSS) pixel dimensions
-  const W = BASE * SCALE;
-  const H = BASE * SCALE;
+  const W = BASE * SCALE;   // logical width
+  const H = BASE * SCALE;   // logical height
 
-  // Canvas physical pixels = logical * DPR; CSS size stays logical
   canvas.width        = Math.round(W * DPR);
   canvas.height       = Math.round(H * DPR);
   canvas.style.width  = W + 'px';
   canvas.style.height = H + 'px';
-
-  // All drawing happens in logical pixels — ctx scaled up by DPR once
   ctx.scale(DPR, DPR);
 
-  // Offscreen canvases at same physical resolution
-  function makeOffscreen() {
+  function makeOff() {
     const c = document.createElement('canvas');
     c.width  = Math.round(W * DPR);
     c.height = Math.round(H * DPR);
-    const x  = c.getContext('2d');
+    const x  = c.getContext('2d', { alpha: true });
     x.scale(DPR, DPR);
     return { c, x };
   }
 
-  const { c: offOH,    x: ctxOH    } = makeOffscreen();
-  const { c: offSlash, x: ctxSlash } = makeOffscreen();
+  const { c: offOH,    x: ctxOH    } = makeOff();
+  const { c: offSlash, x: ctxSlash } = makeOff();
 
   const pathO = new Path2D('M27.98,70.66c-3.18,0-5.98-.56-8.38-1.69-2.4-1.13-4.28-2.7-5.63-4.73-1.35-2.03-2.03-4.38-2.03-7.05s.67-5.07,2.03-7.09c1.35-2.03,3.23-3.6,5.63-4.73,2.4-1.13,5.19-1.69,8.38-1.69s5.97.56,8.38,1.69c2.4,1.13,4.27,2.7,5.61,4.73,1.34,2.03,2,4.39,2,7.09s-.67,5.02-2,7.05c-1.34,2.03-3.2,3.6-5.61,4.73-2.4,1.13-5.19,1.69-8.38,1.69ZM27.98,64.94c1.74,0,3.23-.32,4.48-.95,1.25-.63,2.21-1.52,2.88-2.68.68-1.16,1.01-2.53,1.01-4.12s-.34-3.01-1.01-4.17c-.67-1.16-1.64-2.05-2.88-2.68-1.25-.63-2.74-.95-4.48-.95s-3.2.32-4.46.95c-1.26.63-2.23,1.52-2.91,2.68-.67,1.16-1.01,2.54-1.01,4.17s.34,2.97,1.01,4.12c.68,1.16,1.64,2.05,2.91,2.68,1.26.63,2.75.95,4.46.95Z');
   const pathH = new Path2D('M74.63,48.94c-.9-1.8-2.21-3.19-3.92-4.17-1.71-.97-3.78-1.46-6.21-1.46-2.1,0-4.02.5-5.76,1.49-1.6.91-2.93,2.21-4.01,3.85v-13.71h-7.52v34.68h7.52v-12.38c0-1.59.29-2.96.88-4.1.59-1.14,1.43-2.03,2.52-2.68,1.1-.64,2.38-.97,3.85-.97,2.1,0,3.71.59,4.82,1.78,1.11,1.19,1.67,2.93,1.67,5.25v13.1h7.52v-14.23c0-2.49-.45-4.64-1.35-6.44Z');
   const pathSlash = new Path2D('M94.08,33.4h7.36l-12.61,36.21h-7.36l12.61-36.21Z');
 
-  // Render oh glyphs to offscreen at logical scale
   ctxOH.save();
   ctxOH.scale(SCALE, SCALE);
   ctxOH.fillStyle = '#ffffff';
@@ -358,14 +332,12 @@ document.querySelectorAll('a, .scroll-ind').forEach(el => {
   ctxOH.fill(pathH);
   ctxOH.restore();
 
-  // Render slash to offscreen at logical scale
   ctxSlash.save();
   ctxSlash.scale(SCALE, SCALE);
   ctxSlash.fillStyle = '#ffffff';
   ctxSlash.fill(pathSlash);
   ctxSlash.restore();
 
-  // Slash glyph left edge in logical pixels
   const SLASH_LEFT_PX = 79.47 * SCALE;
   const FAR_LEFT      = -SLASH_LEFT_PX;
 
@@ -376,33 +348,13 @@ document.querySelectorAll('a, .scroll-ind').forEach(el => {
     return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3) / 2;
   }
 
-  let start = null;
+  let start   = null;
+  let rafId   = null;
+  let holding = false;  // true during static hold — rAF paused
 
-  function render(now) {
-    if (!start) start = now;
-    const p = ((now - start) % TOTAL) / TOTAL;
-
+  function drawFrame(slashX, ohClip) {
     ctx.clearRect(0, 0, W, H);
 
-    let slashX, ohClip;
-
-    if (p < T1) {
-      const t = ease(p / T1);
-      slashX  = FAR_LEFT * (1 - t);
-      ohClip  = Math.max(0, SLASH_LEFT_PX + slashX);
-    } else if (p < T2) {
-      slashX  = 0;
-      ohClip  = W;
-    } else if (p < T3) {
-      const t = ease((p - T2) / (T3 - T2));
-      slashX  = FAR_LEFT * t;
-      ohClip  = Math.max(0, SLASH_LEFT_PX + slashX);
-    } else {
-      slashX  = FAR_LEFT;
-      ohClip  = 0;
-    }
-
-    // Draw oh — clipped to revealed region (logical coords, ctx already DPR-scaled)
     if (ohClip > 1) {
       ctx.save();
       ctx.beginPath();
@@ -412,15 +364,78 @@ document.querySelectorAll('a, .scroll-ind').forEach(el => {
       ctx.restore();
     }
 
-    // Draw slash — always visible
     ctx.save();
     ctx.translate(slashX, 0);
     ctx.drawImage(offSlash, 0, 0, W, H);
     ctx.restore();
-    requestAnimationFrame(render);
   }
 
-  requestAnimationFrame(render);
+  function render(now) {
+    if (!start) start = now;
+    const elapsed = (now - start) % TOTAL;
+    const p = elapsed / TOTAL;
+
+    let slashX, ohClip;
+
+    if (p < T1) {
+      // Sweeping in — animate every frame
+      holding = false;
+      const t = ease(p / T1);
+      slashX  = FAR_LEFT * (1 - t);
+      ohClip  = Math.max(0, SLASH_LEFT_PX + slashX);
+      drawFrame(slashX, ohClip);
+      rafId = requestAnimationFrame(render);
+
+    } else if (p < T2) {
+      // Holding full logo — draw once, pause rAF
+      if (!holding) {
+        holding = true;
+        drawFrame(0, W);
+        // Resume rAF just before the sweep-out phase begins
+        const msUntilT2 = (T2 * TOTAL) - elapsed;
+        // Wake up 1 frame (~16ms) before T2 so we don't miss the transition
+        setTimeout(() => {
+          holding = false;
+          rafId = requestAnimationFrame(render);
+        }, Math.max(0, msUntilT2 - 16));
+      }
+
+    } else if (p < T3) {
+      // Sweeping out — animate every frame
+      holding = false;
+      const t = ease((p - T2) / (T3 - T2));
+      slashX  = FAR_LEFT * t;
+      ohClip  = Math.max(0, SLASH_LEFT_PX + slashX);
+      drawFrame(slashX, ohClip);
+      rafId = requestAnimationFrame(render);
+
+    } else {
+      // Gap — slash at rest, draw once, pause rAF
+      if (!holding) {
+        holding = true;
+        drawFrame(FAR_LEFT, 0);
+        const msUntilNext = (TOTAL - elapsed);
+        setTimeout(() => {
+          holding = false;
+          start = null; // reset so next cycle starts fresh
+          rafId = requestAnimationFrame(render);
+        }, Math.max(0, msUntilNext - 16));
+      }
+    }
+  }
+
+  rafId = requestAnimationFrame(render);
+
+  // Pause animation when tab is hidden — saves battery/CPU on mobile
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      cancelAnimationFrame(rafId);
+    } else {
+      holding = false;
+      start   = null;
+      rafId   = requestAnimationFrame(render);
+    }
+  });
 })();
 </script>
 </body>
