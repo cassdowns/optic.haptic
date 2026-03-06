@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>oh/</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400&display=swap" rel="stylesheet">
 <style>
@@ -234,8 +234,10 @@ body::after {
 ===================== */
 @media (max-width: 600px) {
   .top-right   { top: 4vh; right: 5vw; }
-  .bottom-left { bottom: 4vh; left: 5vw; }
-  /* Reduce blur cost on mobile — smaller radius, cheaper */
+  .bottom-left {
+    bottom: calc(12vh + env(safe-area-inset-bottom, 0px));
+    left: 5vw;
+  }
   .bg { filter: blur(50px); }
 }
 </style>
